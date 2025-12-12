@@ -1,0 +1,534 @@
+{
+  "updatedAt": "2025-09-14T21:24:55.552Z",
+  "createdAt": "2025-09-14T20:55:56.528Z",
+  "id": "xcrKx8pSpIMgfmyJ",
+  "name": "My workflow",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "683a8cad-efb6-44f7-9dc3-d9f0f7ef8b8e",
+      "name": "Schedule Trigger - Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        -240,
+        -144
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "a92005ae-d208-42e5-b63c-e0b376b5de37",
+      "name": "Schedule Trigger - Weekly",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        -240,
+        64
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "url": "https://www.howardcountymd.gov/county-council/meeting-documents",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "1ec3a43a-77d0-465a-9f38-be46e6fc671a",
+      "name": "Scrape County Council",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        64,
+        -240
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "extractionValues": {
+          "values": [
+            {
+              "key": "meeting_date",
+              "cssSelector": ".meeting-date"
+            },
+            {
+              "key": "agenda_link",
+              "cssSelector": ".agenda-pdf a",
+              "returnValue": "attribute",
+              "attribute": "href"
+            },
+            {
+              "key": "meeting_title",
+              "cssSelector": ".meeting-title"
+            },
+            {
+              "key": "video_link",
+              "cssSelector": ".video-link a",
+              "returnValue": "attribute",
+              "attribute": "href"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e941a772-20c2-4a49-bdea-a46cb7014c31",
+      "name": "HTML Extract - Council",
+      "type": "n8n-nodes-base.htmlExtract",
+      "position": [
+        272,
+        -240
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "https://www.howardcountymd.gov/planning-zoning/meeting-agendas-minutes",
+        "options": {}
+      },
+      "id": "4cde37c6-1e58-44ff-8cbb-d54701904103",
+      "name": "Scrape Planning & Zoning",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        64,
+        -80
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "url": "https://www.howardcountymd.gov/news/rss",
+        "options": {}
+      },
+      "id": "6c48a6f7-ba02-460b-bf8e-9bdab64a154f",
+      "name": "RSS Feed - County News",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [
+        64,
+        96
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.agenda_link }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "2478de6b-cf97-4929-abce-af2b5ef90b32",
+      "name": "Download PDFs",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        464,
+        -240
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {},
+      "id": "af3e2179-bfcd-46ef-b9b7-97a24b5a3fc3",
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        672,
+        -240
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, hash FROM scraped_content WHERE source_url = $1 AND scrape_date > NOW() - INTERVAL '7 days'",
+        "options": {}
+      },
+      "id": "31078ed9-ccff-4614-bb91-6ad04b16fff8",
+      "name": "PostgreSQL - Check Existing",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        272,
+        160
+      ],
+      "typeVersion": 2.6
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.exists }}",
+              "value2": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7a6afc52-6269-47a2-a933-cf6f68c89a27",
+      "name": "Filter New Content",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        464,
+        160
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.claudeApi.apiKey }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-3-haiku-20240307"
+            },
+            {
+              "name": "max_tokens",
+              "value": 1000
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"user\", \"content\": \"Summarize this Howard County government meeting content for a local newsletter. Focus on: 1) Key decisions made, 2) Impact on residents, 3) Upcoming votes or hearings. Keep it under 300 words. Content: {{ $json.meeting_text }}\"}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2610f473-67fe-4640-bd7a-cc33bb0433df",
+      "name": "Claude API - Summarize",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        864,
+        -240
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "requestOptions": {}
+      },
+      "id": "97093a92-dfd1-498f-b5f0-717c6c0d6c18",
+      "name": "OpenAI - Generate Headlines",
+      "type": "n8n-nodes-base.openAi",
+      "position": [
+        1072,
+        -240
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {},
+      "id": "5e10c7a0-78ce-45c8-95f2-cce72e4f0734",
+      "name": "Categorize by Topic",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1072,
+        -48
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {},
+      "id": "e324026c-8760-4e07-b1c5-28641c814696",
+      "name": "Detect Neighborhood Impact",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1072,
+        160
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": "newsletter_content",
+        "options": {}
+      },
+      "id": "658b0555-8dd9-4a41-8898-2a108f86c68e",
+      "name": "PostgreSQL - Store Content",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1264,
+        -48
+      ],
+      "typeVersion": 2.6
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM advertisements WHERE start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE AND placement IN ('newsletter_header', 'newsletter_middle', 'newsletter_footer') ORDER BY priority DESC",
+        "options": {}
+      },
+      "id": "8ecc759a-6058-4281-8f9e-bab019f00ec9",
+      "name": "Check Advertisement Slots",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        864,
+        368
+      ],
+      "typeVersion": 2.6
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM newsletter_content WHERE created_at >= NOW() - INTERVAL '7 days' AND status = 'approved' ORDER BY priority DESC, created_at DESC",
+        "options": {}
+      },
+      "id": "d271b6b7-56a8-45f3-a4d0-13dd06702488",
+      "name": "Aggregate Weekly Content",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1072,
+        368
+      ],
+      "typeVersion": 2.6
+    },
+    {
+      "parameters": {},
+      "id": "ea12c466-192c-47a2-a3de-403cf0698f55",
+      "name": "Build Newsletter HTML",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1264,
+        368
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "send"
+      },
+      "id": "7a560f7b-1cfa-4365-8684-6a2edc7da6ef",
+      "name": "SendGrid - Send Newsletter",
+      "type": "n8n-nodes-base.sendGrid",
+      "position": [
+        1472,
+        368
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT email, preferences, neighborhood FROM subscribers WHERE status = 'active' AND verified = true",
+        "options": {}
+      },
+      "id": "2a20f55f-bf39-4629-9e02-ca1236e1121c",
+      "name": "Get Subscriber List",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1264,
+        560
+      ],
+      "typeVersion": 2.6
+    },
+    {
+      "parameters": {},
+      "id": "8d3efc2f-7fce-45c8-bf04-adcb7629dc0d",
+      "name": "Personalize Content",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1472,
+        560
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "path": "newsletter-analytics",
+        "options": {}
+      },
+      "id": "b54197e2-7642-433a-809a-b26b8d31edab",
+      "name": "Track Analytics",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        1664,
+        368
+      ],
+      "typeVersion": 2.1,
+      "webhookId": "d4e19ddc-2290-4e7e-829f-f7cc063f8bf3"
+    },
+    {
+      "parameters": {},
+      "id": "f32088d9-8b56-4542-9337-cb49f243e19e",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.errorTrigger",
+      "position": [
+        864,
+        768
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "toEmail": "admin@howardcountynewsletter.com",
+        "subject": "Newsletter Workflow Error",
+        "options": {}
+      },
+      "id": "a748ec9d-0a36-4ab3-a9fb-6f0579543914",
+      "name": "Send Error Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [
+        1072,
+        768
+      ],
+      "typeVersion": 2.1,
+      "webhookId": "71f42ef0-0531-459f-866a-160880de95b1"
+    },
+    {
+      "parameters": {},
+      "id": "15a2542a-a8f9-42a6-a8a9-97a6ab1c2a77",
+      "name": "Generate Print Version",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1664,
+        160
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {},
+      "id": "87029ca1-206e-492a-aba9-60621e8df457",
+      "name": "Upload to Cloud Storage",
+      "type": "n8n-nodes-base.aws",
+      "position": [
+        1872,
+        160
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "text": "📰 New Howard County Weekly Digest is out! This week: {{ $json.top_headline }}\n\nRead more: {{ $json.newsletter_link }}\n\n#HowardCountyMD #LocalNews",
+        "additionalFields": {}
+      },
+      "id": "3df62f7f-14be-496b-b59e-535901e95533",
+      "name": "Social Media Post",
+      "type": "n8n-nodes-base.twitter",
+      "position": [
+        1664,
+        560
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": "newsletter_metrics",
+        "options": {}
+      },
+      "id": "fde7adfb-f764-468f-8ff9-1531185c8c41",
+      "name": "Monitor Performance",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1872,
+        368
+      ],
+      "typeVersion": 2.6
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "genericCredentialType",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $binary.data }}"
+            },
+            {
+              "name": "model",
+              "value": "whisper-1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f1e4c01e-d7ef-41f7-a19c-6cbdaf8a349f",
+      "name": "Meeting Video Transcription",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        672,
+        -48
+      ],
+      "typeVersion": 4.2
+    }
+  ],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "a4f622f9-71ad-4cc2-997d-5cc375ae1ed2",
+  "activeVersionId": null,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2025-09-14T20:55:56.528Z",
+      "createdAt": "2025-09-14T20:55:56.528Z",
+      "role": "workflow:owner",
+      "workflowId": "xcrKx8pSpIMgfmyJ",
+      "projectId": "AhFmuOMWZ2bWWYq8"
+    }
+  ],
+  "activeVersion": null,
+  "tags": [
+    {
+      "updatedAt": "2025-09-14T21:24:53.044Z",
+      "createdAt": "2025-09-14T21:24:53.044Z",
+      "id": "cqCrddmyGVSLyf9t",
+      "name": "hocomd"
+    }
+  ]
+}
